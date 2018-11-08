@@ -1,7 +1,7 @@
 /*
-Name:		DWireless.ino
-Created:	01-Jul-18 02:44:00
-Author:	Joaquim Monteiro
+Name:		wESP32.ino
+Created:	08-Nov-18 12:44:00
+Author:		Joaquim Monteiro
 */
 
 #include <EEPROM.h>
@@ -10,7 +10,6 @@ Author:	Joaquim Monteiro
 #include <PubSubClient.h>
 #include <rom/rtc.h>
 #include "error_lib.h"
-#include "cmd_parser.h"
 
 //**** DEFINE CONSTANTS 
 #define SLEEP_PERIOD	30e6	//20 seconds

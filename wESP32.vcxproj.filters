@@ -21,7 +21,7 @@
     <ClInclude Include="__vm\.wESP32.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="cmd_parser.h">
+    <ClInclude Include="error_lib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

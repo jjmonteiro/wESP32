@@ -12,44 +12,46 @@ Author:    Joaquim Monteiro
 #include "error_lib.h"
 
 //**** DEFINE CONSTANTS 
-#define SLEEP_PERIOD	30e6	//20 seconds
-#define SHUTDOWN_TIMEOUT 500
-#define TASK_RUN_TWICE 2
-#define BUILTIN_LED		2
-#define SERIAL_BAUDRATE	115200
-#define ALARM_THRESHOLD 3000
+#define MAJOR_VERSION		1
+#define MINOR_VERSION		10
+#define SLEEP_PERIOD		30e6	//20 seconds
+#define SHUTDOWN_TIMEOUT	500
+#define TASK_RUN_TWICE		2
+#define BUILTIN_LED			2
+#define SERIAL_BAUDRATE		115200
+#define ALARM_THRESHOLD		3000
 
 //**** PORTS SETUP
-#define ANALOG_IN_0 36
-#define ANALOG_IN_1 39
-#define ANALOG_IN_2 34
-#define ANALOG_IN_3 35
-#define ANALOG_IN_4 32
-#define ANALOG_IN_5 33
+#define ANALOG_IN_0		36
+#define ANALOG_IN_1		39
+#define ANALOG_IN_2		34
+#define ANALOG_IN_3		35
+#define ANALOG_IN_4		32
+#define ANALOG_IN_5		33
 
-#define DIGITAL_OUT_0 14	//r led
-#define DIGITAL_OUT_1 27	//y led
-#define DIGITAL_OUT_2 26
-#define DIGITAL_OUT_3 25	//buzzer
+#define DIGITAL_OUT_0	14	//r led
+#define DIGITAL_OUT_1	27	//y led
+#define DIGITAL_OUT_2	26
+#define DIGITAL_OUT_3	25	//buzzer
 
 //**** DEVICE INFORMATION
-const char* device_type = "PH850";
+const char* device_type		= "PH850";
 const char* device_location = "ZONE_1";
 String device_topic;
 bool ALARM, FAULT, BUZZER, RESET;
 int an_in_0, an_in_1, an_in_2;
 
 //**** NETWORK CREDENTIALS
-const char* ssid = "(-_-)";
-const char* psk = "monteiro";
+const char* ssid	= "(-_-)";
+const char* psk		= "monteiro";
 
 //**** SERVER INFO [cloudmqtt.com] ****
-const char* mqtt_server = "m20.cloudmqtt.com";
-const char* mqtt_user = "lgnnlude";
-const char* mqtt_password = "iWg6ghr1pMLO";
-const int   mqtt_port = 17283;
-const char* will_message = "CONNECTION_LOST";
-const char* main_topic = "MAIN";
+const char* mqtt_server		= "m20.cloudmqtt.com";
+const char* mqtt_user		= "lgnnlude";
+const char* mqtt_password	= "iWg6ghr1pMLO";
+const int   mqtt_port		= 17283;
+const char* will_message	= "CONNECTION_LOST";
+const char* main_topic		= "MAIN";
 
 //**** CALLBACK METHODS
 void t1Callback();

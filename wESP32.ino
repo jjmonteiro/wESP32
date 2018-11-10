@@ -17,7 +17,7 @@ Author:		Joaquim Monteiro
 #define TASK_RUN_TWICE 2
 #define BUILTIN_LED		2
 #define SERIAL_BAUDRATE	115200
-#define FIRE_THRESHOLD 3000
+#define ALARM_THRESHOLD 3000
 
 //**** PORTS SETUP
 #define ANALOG_IN_0 36
@@ -94,7 +94,7 @@ void t2Callback() {
 	an_in_1 = analogRead(ANALOG_IN_1);
 	an_in_2 = analogRead(ANALOG_IN_2);
 
-	if (an_in_0 > FIRE_THRESHOLD) {
+	if (an_in_0 > ALARM_THRESHOLD) {
 		ALARM = 1;
 		BUZZER = 1;
 	}

@@ -10,6 +10,7 @@ Author:     Joaquim Monteiro
 #include <PubSubClient.h>
 #include <rom/rtc.h>
 #include "error_lib.h"
+#include "wdevice.h"
 
 //**** DEFINE CONSTANTS 
 #define MAJOR_VERSION       1
@@ -21,25 +22,7 @@ Author:     Joaquim Monteiro
 #define SERIAL_BAUDRATE     115200
 #define ALARM_THRESHOLD     3000
 
-//**** PORTS SETUP
-#define ANALOG_IN_0     36
-#define ANALOG_IN_1     39
-#define ANALOG_IN_2     34
-#define ANALOG_IN_3     35
-#define ANALOG_IN_4     32
-#define ANALOG_IN_5     33
 
-#define DIGITAL_OUT_0   14	//r led
-#define DIGITAL_OUT_1   27	//y led
-#define DIGITAL_OUT_2   26
-#define DIGITAL_OUT_3   25	//buzzer
-
-//**** DEVICE INFORMATION
-const char* device_type     = "PH850";
-const char* device_location = "ZONE_1";
-String device_topic;
-bool ALARM, FAULT, BUZZER, RESET;
-int an_in_0, an_in_1, an_in_2;
 
 //**** NETWORK CREDENTIALS
 const char* ssid    = "(-_-)";
@@ -52,6 +35,7 @@ const char* mqtt_password   = "iWg6ghr1pMLO";
 const int   mqtt_port       = 17283;
 const char* will_message    = "CONNECTION_LOST";
 const char* main_topic      = "MAIN";
+String      device_topic;
 
 //**** CALLBACK METHODS
 void t1Callback();
@@ -68,7 +52,7 @@ Task t4(5000, TASK_RUN_TWICE, &t4Callback);		// deep sleep
 												//Objects
 WiFiClient espClient;
 PubSubClient client(espClient);
-
+wDevice thisDevice;
 Scheduler runner;
 //ADC_MODE(ADC_VCC);
 
@@ -76,7 +60,7 @@ Scheduler runner;
 
 void t1Callback() {
 	Serial.print("t1: ");
-	Serial.println(millis());
+	serialDebug(millis());
 
 	if (WiFi.status() != WL_CONNECTED) {
 		setupWifi();
@@ -90,16 +74,11 @@ void t1Callback() {
 
 void t2Callback() {
 	Serial.print("t2: ");
-	Serial.println(millis());
+	serialDebug(millis());
 
-	an_in_0 = analogRead(ANALOG_IN_0);
-	an_in_1 = analogRead(ANALOG_IN_1);
-	an_in_2 = analogRead(ANALOG_IN_2);
 
-	if (an_in_0 > ALARM_THRESHOLD) {
-		ALARM = 1;
-		BUZZER = 1;
-	}
+
+
 
 	if (client.connected()) {
 		publish();
@@ -109,13 +88,13 @@ void t2Callback() {
 
 void t3Callback() {
 	Serial.print("t3: ");
-	Serial.println(millis());
+	serialDebug(millis());
 
 }
 
 void t4Callback() {
 	Serial.print("t4: ");
-	Serial.println(millis());
+	serialDebug(millis());
 
 
 	if (t4.isLastIteration()) {
@@ -129,11 +108,11 @@ void terminateAll() {
 	int timeout = 0;
 
 	client.disconnect();
-	Serial.println("client.disconnect()");
+	serialDebug("client.disconnect()");
 	runner.disableAll();
-	Serial.println("runner.disableAll()");
+	serialDebug("runner.disableAll()");
 	WiFi.disconnect();
-	Serial.println("WiFi.disconnect()");
+	serialDebug("WiFi.disconnect()");
 	while (WiFi.isConnected() || client.connected()) {
 		yield();
 		timeout++;
@@ -141,7 +120,7 @@ void terminateAll() {
 			return;
 		}
 	}
-	Serial.println(String(timeout) + ": all processes terminated.");
+	serialDebug(String(timeout) + ": all processes terminated.");
 }
 
 void subscribe() {
@@ -153,17 +132,15 @@ void subscribe() {
 	int fail = 0;
 	Serial.print("Subscribing topics..");
 
-	fail += !client.subscribe((device_topic + "/request").c_str(), 1);
-	fail += !client.subscribe((device_topic + "/alarm").c_str(), 1);
-	fail += !client.subscribe((device_topic + "/fault").c_str(), 1);
-	fail += !client.subscribe((device_topic + "/out_2").c_str(), 1);
-	fail += !client.subscribe((device_topic + "/buzzer").c_str(), 1);
+	fail += !client.subscribe((device_topic + "/outputs").c_str(), 1);
+	fail += !client.subscribe((device_topic + "/config").c_str(), 1);
+
 
 	if (fail) {
-		Serial.println("failed.");
+		serialDebug("failed.");
 	}
 	else {
-		Serial.println("ok!");
+		serialDebug("ok!");
 	}
 }
 
@@ -175,6 +152,7 @@ void publish() {
 	digitalWrite(BUILTIN_LED, HIGH);
 	String payload;
 	int fail = 0;
+    int analogValue;
 	Serial.print("Publishing messages..");
 
 
@@ -183,87 +161,69 @@ void publish() {
 	/*
 	payload = String((float)ESP.getFreeHeap() / 1024);
 	fail += !client.publish((device_topic + "/memory").c_str(), payload.c_str(), true);*/
+    analogValue = thisDevice.getInput(ANALOG_IN_0);
+	fail += !client.publish((device_topic + "/sensor_0").c_str(), String(analogValue).c_str(), true);
+    if ((analogValue >= thisDevice.getOutputTrigger[0]) && (thisDevice.getOutput(0) == false)) {
+        thisDevice.setOutput(DIGITAL_OUT_0, HIGH);
+		fail += !client.publish((device_topic + "/out_0").c_str(), "1", true);
+    }
+    analogValue = thisDevice.getInput(ANALOG_IN_1);
+    fail += !client.publish((device_topic + "/sensor_1").c_str(), String(analogValue).c_str(), true);
+    if ((analogValue >= thisDevice.getOutputTrigger[1]) && (thisDevice.getOutput(1) == false)) {
+        thisDevice.setOutput(DIGITAL_OUT_1, HIGH);
+        fail += !client.publish((device_topic + "/out_1").c_str(), "1", true);
+    }
+    analogValue = thisDevice.getInput(ANALOG_IN_2);
+    fail += !client.publish((device_topic + "/sensor_2").c_str(), String(analogValue).c_str(), true);
+    if ((analogValue >= thisDevice.getOutputTrigger[2]) && (thisDevice.getOutput(2) == false)) {
+        thisDevice.setOutput(DIGITAL_OUT_2, HIGH);
+        fail += !client.publish((device_topic + "/out_2").c_str(), "1", true);
+    }
+    analogValue = thisDevice.getInput(ANALOG_IN_3);
+    fail += !client.publish((device_topic + "/sensor_3").c_str(), String(analogValue).c_str(), true);
+    if ((analogValue >= thisDevice.getOutputTrigger[3]) && (thisDevice.getOutput(3) == false)) {
+        thisDevice.setOutput(DIGITAL_OUT_3, HIGH);
+        fail += !client.publish((device_topic + "/out_3").c_str(), "1", true);
+    }
 
-	payload = String(an_in_0);
-	fail += !client.publish((device_topic + "/sensor_00").c_str(), payload.c_str(), true);
 
-	payload = String(an_in_1);
-	fail += !client.publish((device_topic + "/sensor_01").c_str(), payload.c_str(), true);
-
-	payload = String(an_in_2);
-	fail += !client.publish((device_topic + "/sensor_02").c_str(), payload.c_str(), true);
-
-
-	if (ALARM) {
-		digitalWrite(DIGITAL_OUT_0, LOW);
-		fail += !client.publish((device_topic + "/alarm").c_str(), String(ALARM).c_str(), true);
-	}
-	if (FAULT) {
-		digitalWrite(DIGITAL_OUT_1, LOW);
-		fail += !client.publish((device_topic + "/fault").c_str(), String(FAULT).c_str(), true);
-	}
-	if (BUZZER) {
-		digitalWrite(DIGITAL_OUT_2, HIGH);
-		fail += !client.publish((device_topic + "/out_02").c_str(), String(BUZZER).c_str(), true);
-	}
-	if (BUZZER) {
-		digitalWrite(DIGITAL_OUT_3, HIGH);
-		fail += !client.publish((device_topic + "/buzzer").c_str(), String(BUZZER).c_str(), true);
-	}
-	if (RESET) {
-		digitalWrite(DIGITAL_OUT_0, !LOW);
-		digitalWrite(DIGITAL_OUT_1, !LOW);
-		digitalWrite(DIGITAL_OUT_2, LOW);
-		digitalWrite(DIGITAL_OUT_3, LOW);
-		fail += !client.publish((device_topic + "/alarm").c_str(), "0", true);
-		fail += !client.publish((device_topic + "/fault").c_str(), "0", true);
-		fail += !client.publish((device_topic + "/out_02").c_str(), "0", true);
-		fail += !client.publish((device_topic + "/buzzer").c_str(), "0", true);
-		ALARM, FAULT, BUZZER, RESET = 0;
-		delay(1000);
-	}
-
-	fail += !client.publish((device_topic + "/request").c_str(), "", true);	//clear last request
 
 	if (fail) {
-		Serial.println("failed.");
+		serialDebug("failed.");
 		FAULT = 1;
 	}
 	else {
-		Serial.println("ok!");
+		serialDebug("ok!");
 	}
 	digitalWrite(BUILTIN_LED, LOW);
 }
 
 void callback(char* in_topic, byte* in_payload, unsigned int length) {
-	String request = PtrToString(in_payload, length);
+	
+    String request = PtrToString(in_payload, length);
+    String topic = String(in_topic);
 
-	Serial.print("Last Message on Topic [");
-	Serial.print(in_topic);
-	Serial.print("] :: Payload [");
-	Serial.print(request);
-	Serial.println("]");
+    serialDebug("Last Message on Topic [" + topic + "] :: Payload [" + request + "]");
 
-	if (request == "") {
-		return;
-	}
+	if (request == "") return;
 
-	if (String(in_topic).endsWith("request")) {
-		Serial.println(cmdParser(request));
-	}
-	if (String(in_topic).endsWith("alarm")) {
-		ALARM = textToBool(request);
-	}
-	if (String(in_topic).endsWith("fault")) {
-		FAULT = textToBool(request);
-	}
-	if (String(in_topic).endsWith("out_2")) {
-		RESET = textToBool(request);
-	}
-	if (String(in_topic).endsWith("buzzer")) {
-		BUZZER = textToBool(request);
-	}
 
+
+    if (topic.compareTo(device_topic + "/outputs/out_0") && textToBool(request)) {
+        thisDevice.setOutput(0, HIGH);
+    }
+    if (topic.compareTo(device_topic + "/outputs/out_1") && textToBool(request)) {
+        thisDevice.setOutput(1, HIGH);
+    }
+    if (topic.compareTo(device_topic + "/outputs/out_2") && textToBool(request)) {
+        thisDevice.setOutput(2, HIGH);
+    }
+    if (topic.compareTo(device_topic + "/outputs/out_3") && textToBool(request)) {
+        thisDevice.setOutput(3, HIGH);
+    }
+    if (topic.compareTo(device_topic + "/config/reset") && textToBool(request)) {
+        thisDevice.resetOutputs();
+    }
 }
 
 bool textToBool(String text) {
@@ -274,54 +234,7 @@ bool textToBool(String text) {
 	return true;
 }
 
-String cmdParser(String command) {
 
-	String reply = "> Unknown command.";
-
-	if (command.startsWith("bled")) {
-		digitalWrite(BUILTIN_LED, textToBool(command));
-		reply = command;
-	}
-	if (command.startsWith("out0")) {
-		digitalWrite(DIGITAL_OUT_0, textToBool(command));
-		reply = command;
-	}
-	if (command.startsWith("out1")) {
-		digitalWrite(DIGITAL_OUT_1, textToBool(command));
-		reply = command;
-	}
-	if (command.startsWith("out2")) {
-		digitalWrite(DIGITAL_OUT_2, textToBool(command));
-		reply = command;
-	}
-	if (command.startsWith("out3")) {
-		digitalWrite(DIGITAL_OUT_3, textToBool(command));
-		reply = command;
-	}
-
-
-	if (command == "ip_addr") {
-		reply = WiFi.localIP().toString();
-	}
-	if (command == "sleep_off") {
-		t4.disable();
-		reply = "Deepsleep: OFF";
-	}
-	if (command == "sleep_on") {
-		t4.enable();
-		reply = "Deepsleep: ON";
-	}
-	if (command == "restart") {
-		terminateAll();
-		ESP.restart();
-	}
-	if (command == "reset") {
-		RESET = 1;
-	}
-
-	publish();
-	return (reply);
-}
 
 String PtrToString(uint8_t *str, unsigned int len) {
 	String result;
@@ -337,15 +250,15 @@ void mqtt_connect() {
 		return;
 	}
 
-	Serial.println("Attempting MQTT connection...");
+	serialDebug("Attempting MQTT connection...");
 	// Create a random client ID
 	String clientId = "ESP32_";
 	clientId += String(random(0xffff), HEX);
-	Serial.println("client ID: " + clientId);
+	serialDebug("client ID: " + clientId);
 	bool success = false;
 
-	device_topic = String(main_topic) + "/" + device_location + "/" + String(WiFi.macAddress());
-	Serial.println("device_topic: " + device_topic);
+	device_topic = String(main_topic) + "/" + thisDevice.getLocation() + "/" + String(WiFi.macAddress());
+	serialDebug("device_topic: " + device_topic);
 	// Attempt to connect
 	// boolean connect (clientID, username, password, willTopic, willQoS, willRetain, willMessage)
 
@@ -353,7 +266,7 @@ void mqtt_connect() {
 	//success = client.connect(clientId.c_str(), mqtt_user, mqtt_password);
 
 	if (success) {
-		Serial.println("connection ok!");
+		serialDebug("connection ok!");
 		subscribe();
 	}
 	else {
@@ -367,7 +280,7 @@ void mqtt_connect() {
 void setupWifi() {
 
 	Serial.print("Connecting to: ");
-	Serial.println(ssid);
+	serialDebug(ssid);
 	WiFi.begin(ssid, psk);
 
 
@@ -393,47 +306,52 @@ void setupWifi() {
 	}
 
 	//Serial.println("");
-	Serial.println("WiFi connected!");
+	serialDebug("WiFi connected!");
 	Serial.print("IP address: ");
-	Serial.println(WiFi.localIP());
+	serialDebug(WiFi.localIP());
 	Serial.print("Signal: ");
-	Serial.println(WiFi.RSSI());
+	serialDebug(WiFi.RSSI());
 	Serial.print("MAC address: ");
-	Serial.println(WiFi.macAddress());
+	serialDebug(WiFi.macAddress());
 
 
 }
 
+template <typename T>
+void serialDebug(T message) {
+    Serial.println(millis() + "> " + String(message));
+}
 
 
 void setup() {
 
 	Serial.begin(SERIAL_BAUDRATE);
 	Serial.println();
-	Serial.println("--Boot Startup--");
-	Serial.println("Serial Initialized @ 115200");
 
-	Serial.println("Boot reason: ");
-	Serial.print("CPU0: ");	print_reset_reason(rtc_get_reset_reason(0));
-	Serial.print("CPU1: ");	print_reset_reason(rtc_get_reset_reason(1));
-	Serial.println("-------------");
+    serialDebug("--Boot Startup--");
+    serialDebug("Serial Initialized @ 115200");
+
+    serialDebug("Boot reason: ");
+    serialDebug("CPU0: ");	print_reset_reason(rtc_get_reset_reason(0));
+    serialDebug("CPU1: ");	print_reset_reason(rtc_get_reset_reason(1));
+	serialDebug("-------------");
 
 	Serial.println(ESP.getChipRevision());
-	Serial.println(ESP.getSdkVersion());
-	Serial.println(ESP.getCpuFreqMHz());
-	Serial.println(ESP.getCycleCount());
-	Serial.println("-------------");
+	serialDebug(ESP.getSdkVersion());
+	serialDebug(ESP.getCpuFreqMHz());
+	serialDebug(ESP.getCycleCount());
+	serialDebug("-------------");
 
-	Serial.println(ESP.getHeapSize());
-	Serial.println(ESP.getFreeHeap());
-	Serial.println(ESP.getFreePsram());
-	Serial.println(ESP.getFlashChipMode());
-	Serial.println(ESP.getFlashChipSize());
-	Serial.println(ESP.getFlashChipSpeed());
-	Serial.println("-------------");
+	serialDebug(ESP.getHeapSize());
+	serialDebug(ESP.getFreeHeap());
+	serialDebug(ESP.getFreePsram());
+	serialDebug(ESP.getFlashChipMode());
+	serialDebug(ESP.getFlashChipSize());
+	serialDebug(ESP.getFlashChipSpeed());
+	serialDebug("-------------");
 
-	Serial.println("Initializing GPIOs..");
-	ALARM, FAULT, BUZZER, RESET = 0;
+	serialDebug("Initializing GPIOs..");
+
 	pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
 	pinMode(DIGITAL_OUT_0, OUTPUT);
 	pinMode(DIGITAL_OUT_1, OUTPUT);
@@ -446,27 +364,27 @@ void setup() {
 	digitalWrite(DIGITAL_OUT_2, HIGH);
 	digitalWrite(DIGITAL_OUT_3, LOW);
 
-	Serial.println("Initializing MQTT Server..");
+	serialDebug("Initializing MQTT Server..");
 	client.setServer(mqtt_server, mqtt_port);
-	Serial.println("mqtt_server: " + String(mqtt_server) + ":" + String(mqtt_port));
+	serialDebug("mqtt_server: " + String(mqtt_server) + ":" + String(mqtt_port));
 	client.setCallback(callback);
 
-	Serial.println("initializing scheduler..");
+	serialDebug("initializing scheduler..");
 	runner.init();
 
-	Serial.println("Adding tasks..");
+	serialDebug("Adding tasks..");
 	runner.addTask(t1);
 	runner.addTask(t2);
 	runner.addTask(t3);
 	runner.addTask(t4);
-	Serial.println("Enabling tasks..");
+	serialDebug("Enabling tasks..");
 	delay(5000);
 	t1.enable();
 	t2.enable();
 	t3.enable();
 	t4.disable();
-	Serial.println("--Boot Complete--");
-	Serial.println();
+	serialDebug("--Boot Complete--");
+	serialDebug("");
 }
 
 

@@ -81,6 +81,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="error_lib.h" />
+    <ClInclude Include="wdevice.h" />
     <ClInclude Include="__vm\.wESP32.vsarduino.h" />
   </ItemGroup>
   <PropertyGroup>
